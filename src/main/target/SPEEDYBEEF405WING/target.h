@@ -170,6 +170,11 @@
 
 #define MAX_PWM_OUTPUT_PORTS       11
 
+#define USE_QUAD_MIXER 1
+#define USE_CUSTOM_MIXER 1
+#define USE_SERVOMIX 1
+#define USE_AIRPLANE_MIXER 1
+
 #define USE_PINIO
 #define USE_PINIOBOX
 #define PINIO1_PIN                  PC13
