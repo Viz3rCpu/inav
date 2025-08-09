@@ -1,0 +1,48 @@
+name: Build INAV (SpeedyBee F405 Wing Mini)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ master, main, dev, "**/vtol**" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (with submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build cmake xz-utils
+
+      # Cache the ARM GCC toolchain that INAV downloads automatically
+      - name: Cache ARM toolchain
+        uses: actions/cache@v4
+        with:
+          path: tools/arm-gnu-toolchain-13.2.rel1
+          key: arm-gcc-13.2-rel1
+
+      - name: Configure (CMake)
+        run: |
+          mkdir -p build
+          cd build
+          # IMPORTANT: pass the target as ENV var (how INAV’s CMake picks it up)
+          TARGET=SPEEDYBEEF405WING cmake .. -G Ninja
+
+      - name: Build
+        run: |
+          cd build
+          ninja -k 0
+
+      - name: Upload firmware artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: inav_SPEEDYBEEF405WING
+          path: |
+            build/obj/SPEEDYBEEF405WING/*.hex
+            build/obj/SPEEDYBEEF405WING/*.bin
+          if-no-files-found: error
