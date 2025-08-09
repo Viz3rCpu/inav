@@ -1,39 +1,34 @@
-name: INAV Custom Build
+name: INAV Build
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - master
+  pull_request:
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout source
-        uses: actions/checkout@v4
-        with:
-          submodules: recursive
+      - name: Checkout repository
+        uses: actions/checkout@v3
 
       - name: Install dependencies
         run: |
-          sudo apt update
-          sudo apt install -y ninja-build cmake gcc-arm-none-eabi
+          sudo apt-get update
+          sudo apt-get install -y ninja-build cmake git wget xz-utils
 
-      - name: Configure CMake for SPEEDYBEEF405WING
+      - name: Build SPEEDYBEEF405WING firmware
         run: |
           mkdir -p build
           cd build
-          TARGET=SPEEDYBEEF405WING cmake .. -G Ninja
+          cmake .. -G Ninja -DTOOLCHAIN=arm-none-eabi
+          ninja inav_SPEEDYBEEF405WING
 
-      - name: Build firmware for SPEEDYBEEF405WING
-        run: |
-          cd build
-          ninja -k 0 obj/SPEEDYBEEF405WING/inav_SPEEDYBEEF405WING.hex
-
-      - name: Upload firmware artifact
-        uses: actions/upload-artifact@v4
+      - name: Upload HEX file
+        uses: actions/upload-artifact@v3
         with:
-          name: inav_SPEEDYBEEF405WING
-          path: |
-            build/obj/SPEEDYBEEF405WING/*.hex
-            build/obj/SPEEDYBEEF405WING/*.bin
-          if-no-files-found: error
+          name: SPEEDYBEEF405WING-firmware
+          path: build/obj/SPEEDYBEEF405WING/inav_SPEEDYBEEF405WING.hex
