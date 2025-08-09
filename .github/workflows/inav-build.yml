@@ -1,67 +1,44 @@
-name: INAV Build (SPEEDYBEEF405WING)
+name: SpeedybeeBuild
 
 on:
   workflow_dispatch:
   push:
     branches: [ master ]
-  pull_request:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           submodules: recursive
 
-      - name: Install deps
+      - name: Install build tools
         run: |
           sudo apt-get update
           sudo apt-get install -y ninja-build cmake xz-utils
 
-      - name: Configure (CMake + toolchain)
+      - name: Configure CMake (downloads toolchain automatically)
         run: |
           rm -rf build
           mkdir -p build
-          cd build
-          cmake .. -G Ninja -DTOOLCHAIN=arm-none-eabi
+          cmake -S . -B build -G Ninja -DTOOLCHAIN=arm-none-eabi
 
-      - name: Show available targets (for debugging)
+      - name: Build SPEEDYBEEF405WING ELF
         run: |
-          cd build
-          echo "===== ALL NINJA TARGETS ====="
-          ninja -t targets all | sed -n '1,200p'
-          echo "============================="
-          echo "===== Targets matching SPEEDYBEEF405WING ====="
-          ninja -t targets all | grep -i SPEEDYBEEF405WING || true
-          echo "=============================================="
+          cmake --build build --target src/main/target/SPEEDYBEEF405WING/SPEEDYBEEF405WING.elf -j$(nproc)
 
-      - name: Build this board’s HEX (auto-detect)
+      - name: Make HEX and BIN from ELF
         run: |
-          cd build
-          # Find the first .hex target that mentions SPEEDYBEEF405WING
-          HEX_TGT=$(ninja -t targets all | awk '/SPEEDYBEEF405WING/ && /\.hex$/ {print $1; exit}')
-          if [ -z "$HEX_TGT" ]; then
-            echo "::error::Could not find a .hex target for SPEEDYBEEF405WING."
-            echo "Here are some candidates:"
-            ninja -t targets all | grep -i SPEEDYBEEF405WING || true
-            exit 1
-          fi
-          echo "Building target: $HEX_TGT"
-          ninja -k 0 "$HEX_TGT"
-
-      - name: Collect firmware files
-        run: |
-          mkdir -p out
-          # grab any hex/bin produced anywhere under build
-          find build -type f \( -name "*.hex" -o -name "*.bin" \) -print -exec cp {} out/ \;
-          echo "Collected files:"
-          ls -l out || true
+          TOOLBIN="${{ github.workspace }}/tools/arm-gnu-toolchain-13.2.rel1/bin"
+          ELF="build/src/main/target/SPEEDYBEEF405WING/SPEEDYBEEF405WING.elf"
+          mkdir -p build/artifacts
+          "$TOOLBIN/arm-none-eabi-objcopy" -O ihex    "$ELF" "build/artifacts/SPEEDYBEEF405WING.hex"
+          "$TOOLBIN/arm-none-eabi-objcopy" -O binary  "$ELF" "build/artifacts/SPEEDYBEEF405WING.bin"
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: SPEEDYBEEF405WING-firmware
-          path: out/*
-          if-no-files-found: error
+          name: SPEEDYBEEF405WING
+          path: build/artifacts/*
