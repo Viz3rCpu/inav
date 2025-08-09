@@ -1,34 +1,67 @@
-name: INAV SpeedybeeCustom1
+name: INAV Build (SPEEDYBEEF405WING)
 
 on:
   workflow_dispatch:
   push:
-    branches:
-      - master
+    branches: [ master ]
   pull_request:
 
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
-      - name: Install dependencies
+      - name: Install deps
         run: |
           sudo apt-get update
-          sudo apt-get install -y ninja-build cmake git wget xz-utils
+          sudo apt-get install -y ninja-build cmake xz-utils
 
-      - name: Build SPEEDYBEEF405WING firmware
+      - name: Configure (CMake + toolchain)
         run: |
+          rm -rf build
           mkdir -p build
           cd build
           cmake .. -G Ninja -DTOOLCHAIN=arm-none-eabi
-          ninja inav_SPEEDYBEEF405WING
 
-      - name: Upload HEX file
+      - name: Show available targets (for debugging)
+        run: |
+          cd build
+          echo "===== ALL NINJA TARGETS ====="
+          ninja -t targets all | sed -n '1,200p'
+          echo "============================="
+          echo "===== Targets matching SPEEDYBEEF405WING ====="
+          ninja -t targets all | grep -i SPEEDYBEEF405WING || true
+          echo "=============================================="
+
+      - name: Build this board’s HEX (auto-detect)
+        run: |
+          cd build
+          # Find the first .hex target that mentions SPEEDYBEEF405WING
+          HEX_TGT=$(ninja -t targets all | awk '/SPEEDYBEEF405WING/ && /\.hex$/ {print $1; exit}')
+          if [ -z "$HEX_TGT" ]; then
+            echo "::error::Could not find a .hex target for SPEEDYBEEF405WING."
+            echo "Here are some candidates:"
+            ninja -t targets all | grep -i SPEEDYBEEF405WING || true
+            exit 1
+          fi
+          echo "Building target: $HEX_TGT"
+          ninja -k 0 "$HEX_TGT"
+
+      - name: Collect firmware files
+        run: |
+          mkdir -p out
+          # grab any hex/bin produced anywhere under build
+          find build -type f \( -name "*.hex" -o -name "*.bin" \) -print -exec cp {} out/ \;
+          echo "Collected files:"
+          ls -l out || true
+
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: SPEEDYBEEF405WING-firmware
-          path: build/obj/SPEEDYBEEF405WING/inav_SPEEDYBEEF405WING.hex
+          path: out/*
+          if-no-files-found: error
