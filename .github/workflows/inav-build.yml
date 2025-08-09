@@ -1,4 +1,4 @@
-name: INAV Build
+name: INAV SpeedybeeCustom1
 
 on:
   workflow_dispatch:
@@ -13,7 +13,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install dependencies
         run: |
@@ -28,7 +28,7 @@ jobs:
           ninja inav_SPEEDYBEEF405WING
 
       - name: Upload HEX file
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: SPEEDYBEEF405WING-firmware
           path: build/obj/SPEEDYBEEF405WING/inav_SPEEDYBEEF405WING.hex
