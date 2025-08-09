@@ -1,19 +1,18 @@
-name: Build INAV (SPEEDYBEEF405WING)
+name: Build INAV (SPEEDYBEEF405WING_for_bl)
 
 on:
   workflow_dispatch:
   push:
-    paths:
-      - "src/**"
-      - "cmake/**"
-      - ".github/workflows/inav-build.yml"
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
 
 jobs:
   build:
     runs-on: ubuntu-24.04
 
     steps:
-      - name: Checkout (with submodules)
+      - name: Checkout repo (with submodules)
         uses: actions/checkout@v4
         with:
           submodules: recursive
@@ -24,32 +23,49 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ninja-build cmake xz-utils
 
-      - name: Configure CMake (arm-none-eabi)
+      - name: Configure CMake (will auto-download the correct ARM toolchain)
         run: |
           rm -rf build
           mkdir -p build
           cd build
           cmake .. -G Ninja -DTOOLCHAIN=arm-none-eabi
 
-      - name: Build SPEEDYBEEF405WING
+      - name: Build bootloader-friendly target
         run: |
-          cd build
-          # Build the .bin (this implicitly builds the .elf too)
-          cmake --build . --target src/main/target/SPEEDYBEEF405WING/SPEEDYBEEF405WING.bin -j"$(nproc)"
+          cmake --build build --target bin/SPEEDYBEEF405WING_for_bl.elf -j"$(nproc)" || \
+          cmake --build build --target SPEEDYBEEF405WING_for_bl.elf -j"$(nproc)"
 
-      - name: Collect artifacts
+      - name: Package artifacts (.bin and .hex)
         run: |
+          set -e
+          # Find the produced ELF (path can differ by generator); prefer bin/ if it exists
+          ELF=""
+          if [ -f build/bin/SPEEDYBEEF405WING_for_bl.elf ]; then
+            ELF="build/bin/SPEEDYBEEF405WING_for_bl.elf"
+          elif [ -f build/src/main/target/SPEEDYBEEF405WING/SPEEDYBEEF405WING_for_bl.elf ]; then
+            ELF="build/src/main/target/SPEEDYBEEF405WING/SPEEDYBEEF405WING_for_bl.elf"
+          else
+            echo "Could not locate SPEEDYBEEF405WING_for_bl.elf"
+            echo "Available targets (first 300 lines):"
+            ninja -C build -t targets all | sed -n '1,300p'
+            exit 1
+          fi
+
           mkdir -p out
-          # INAV places the final .bin at the repo root's build/ with version in the name
-          cp -v build/inav_*_SPEEDYBEEF405WING.bin out/
-          # The .elf is in build/bin/
-          cp -v build/bin/SPEEDYBEEF405WING.elf out/ || true
-          # Optional: map / listing
-          ls -la build | sed -n '1,200p'
-          ls -la out
 
-      - name: Upload firmware artifact
+          # Convert to BIN and HEX (bootloader-friendly sizes)
+          TOOLS="$(pwd)/tools/arm-gnu-toolchain-13.2.rel1/bin"
+          "${TOOLS}/arm-none-eabi-objcopy" -Obinary "${ELF}" "out/inav_SPEEDYBEEF405WING_for_bl.bin"
+          "${TOOLS}/arm-none-eabi-objcopy" -Oihex  "${ELF}" "out/inav_SPEEDYBEEF405WING_for_bl.hex"
+
+          # Also copy the ELF for debugging
+          cp "${ELF}" "out/"
+
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: inav-SPEEDYBEEF405WING-${{ github.sha }}
-          path: out/*
+          name: inav-SPEEDYBEEF405WING_for_bl
+          path: |
+            out/inav_SPEEDYBEEF405WING_for_bl.bin
+            out/inav_SPEEDYBEEF405WING_for_bl.hex
+            out/SPEEDYBEEF405WING_for_bl.elf
