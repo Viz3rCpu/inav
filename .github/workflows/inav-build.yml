@@ -1,44 +1,58 @@
-name: SpeedybeeBuild
+name: Build INAV (SPEEDYBEEF405WING)
 
 on:
   workflow_dispatch:
   push:
-    branches: [ master ]
+    paths:
+      - "src/**"
+      - "cmake/**"
+      - ".github/workflows/inav-build.yml"
 
 jobs:
   build:
     runs-on: ubuntu-24.04
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout (with submodules)
+        uses: actions/checkout@v4
         with:
           submodules: recursive
+          fetch-depth: 1
 
       - name: Install build tools
         run: |
           sudo apt-get update
           sudo apt-get install -y ninja-build cmake xz-utils
 
-      - name: Configure CMake (downloads toolchain automatically)
+      - name: Configure CMake (arm-none-eabi)
         run: |
           rm -rf build
           mkdir -p build
-          cmake -S . -B build -G Ninja -DTOOLCHAIN=arm-none-eabi
+          cd build
+          # TOOLCHAIN=arm-none-eabi tells INAV’s CMake to auto-download the correct ARM toolchain
+          cmake .. -G Ninja -DTOOLCHAIN=arm-none-eabi
 
-      - name: Build SPEEDYBEEF405WING ELF
+      - name: (Debug) list SPEEDYBEEF405WING targets
         run: |
-          cmake --build build --target src/main/target/SPEEDYBEEF405WING/SPEEDYBEEF405WING.elf -j$(nproc)
+          cd build
+          ninja -t targets all | grep -i SPEEDYBEEF405WING || true
 
-      - name: Make HEX and BIN from ELF
+      - name: Build firmware (.bin)
         run: |
-          TOOLBIN="${{ github.workspace }}/tools/arm-gnu-toolchain-13.2.rel1/bin"
-          ELF="build/src/main/target/SPEEDYBEEF405WING/SPEEDYBEEF405WING.elf"
-          mkdir -p build/artifacts
-          "$TOOLBIN/arm-none-eabi-objcopy" -O ihex    "$ELF" "build/artifacts/SPEEDYBEEF405WING.hex"
-          "$TOOLBIN/arm-none-eabi-objcopy" -O binary  "$ELF" "build/artifacts/SPEEDYBEEF405WING.bin"
+          cd build
+          # Build the .bin target directly (this exists even if the .elf is not a top-level target)
+          cmake --build . --target src/main/target/SPEEDYBEEF405WING/SPEEDYBEEF405WING.bin -j"$(nproc)"
 
-      - name: Upload artifacts
+      - name: Collect artifacts
+        run: |
+          mkdir -p out
+          cp -v build/src/main/target/SPEEDYBEEF405WING/SPEEDYBEEF405WING.bin out/
+          # Grab extra files if they exist (not required)
+          [ -f build/src/main/target/SPEEDYBEEF405WING/SPEEDYBEEF405WING.elf ] && cp -v build/src/main/target/SPEEDYBEEF405WING/SPEEDYBEEF405WING.elf out/
+          [ -f build/src/main/target/SPEEDYBEEF405WING/SPEEDYBEEF405WING.map ] && cp -v build/src/main/target/SPEEDYBEEF405WING/SPEEDYBEEF405WING.map out/
+
+      - name: Upload firmware artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SPEEDYBEEF405WING
-          path: build/artifacts/*
+          name: inav-SPEEDYBEEF405WING-${{ github.sha }}
+          path: out/*
