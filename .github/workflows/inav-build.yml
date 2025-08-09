@@ -29,27 +29,24 @@ jobs:
           rm -rf build
           mkdir -p build
           cd build
-          # TOOLCHAIN=arm-none-eabi tells INAV’s CMake to auto-download the correct ARM toolchain
           cmake .. -G Ninja -DTOOLCHAIN=arm-none-eabi
 
-      - name: (Debug) list SPEEDYBEEF405WING targets
+      - name: Build SPEEDYBEEF405WING
         run: |
           cd build
-          ninja -t targets all | grep -i SPEEDYBEEF405WING || true
-
-      - name: Build firmware (.bin)
-        run: |
-          cd build
-          # Build the .bin target directly (this exists even if the .elf is not a top-level target)
+          # Build the .bin (this implicitly builds the .elf too)
           cmake --build . --target src/main/target/SPEEDYBEEF405WING/SPEEDYBEEF405WING.bin -j"$(nproc)"
 
       - name: Collect artifacts
         run: |
           mkdir -p out
-          cp -v build/src/main/target/SPEEDYBEEF405WING/SPEEDYBEEF405WING.bin out/
-          # Grab extra files if they exist (not required)
-          [ -f build/src/main/target/SPEEDYBEEF405WING/SPEEDYBEEF405WING.elf ] && cp -v build/src/main/target/SPEEDYBEEF405WING/SPEEDYBEEF405WING.elf out/
-          [ -f build/src/main/target/SPEEDYBEEF405WING/SPEEDYBEEF405WING.map ] && cp -v build/src/main/target/SPEEDYBEEF405WING/SPEEDYBEEF405WING.map out/
+          # INAV places the final .bin at the repo root's build/ with version in the name
+          cp -v build/inav_*_SPEEDYBEEF405WING.bin out/
+          # The .elf is in build/bin/
+          cp -v build/bin/SPEEDYBEEF405WING.elf out/ || true
+          # Optional: map / listing
+          ls -la build | sed -n '1,200p'
+          ls -la out
 
       - name: Upload firmware artifact
         uses: actions/upload-artifact@v4
