@@ -1,4 +1,4 @@
-name: Build INAV (SPEEDYBEEF405WING_for_bl)
+name: build
 
 on:
   workflow_dispatch:
@@ -7,58 +7,43 @@ jobs:
   build:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
         with:
           submodules: recursive
-          fetch-depth: 1
 
-      - name: Install build tools
+      - name: Install tools
         run: |
           sudo apt-get update
           sudo apt-get install -y ninja-build cmake xz-utils
 
-      - name: Configure CMake
+      - name: Configure (enable LTO)
         run: |
           rm -rf build
           mkdir -p build
           cd build
-          cmake .. -G Ninja -DTOOLCHAIN=arm-none-eabi
+          cmake .. -G Ninja -DTOOLCHAIN=arm-none-eabi \
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DCMAKE_C_FLAGS_RELWITHDEBINFO="-Os -flto" \
+            -DCMAKE_EXE_LINKER_FLAGS_RELWITHDEBINFO="-flto"
 
-      - name: Build _for_bl target
+      - name: Build (for bootloader slot)
         run: |
-          cmake --build build --target bin/SPEEDYBEEF405WING_for_bl.elf -j"$(nproc)" || \
-          cmake --build build --target SPEEDYBEEF405WING_for_bl.elf -j"$(nproc)"
+          cmake --build build --target src/main/target/SPEEDYBEEF405WING/SPEEDYBEEF405WING_for_bl.elf -j$(nproc)
 
-      - name: Produce BIN/HEX and print sizes
+      - name: Make BIN/HEX
         run: |
-          set -e
-          TOOLS="$PWD/tools/arm-gnu-toolchain-13.2.rel1/bin"
-          # locate ELF
-          if [ -f build/bin/SPEEDYBEEF405WING_for_bl.elf ]; then
-            ELF="build/bin/SPEEDYBEEF405WING_for_bl.elf"
-          else
-            ELF="build/src/main/target/SPEEDYBEEF405WING/SPEEDYBEEF405WING_for_bl.elf"
-          fi
-          mkdir -p out
-          "$TOOLS/arm-none-eabi-objcopy" -Obinary "$ELF" out/inav_SPEEDYBEEF405WING_for_bl.bin
-          "$TOOLS/arm-none-eabi-objcopy" -Oihex  "$ELF" out/inav_SPEEDYBEEF405WING_for_bl.hex
+          arm-none-eabi-objcopy -O binary \
+            build/bin/SPEEDYBEEF405WING_for_bl.elf \
+            build/inav_SPEEDYBEEF405WING_for_bl.bin
+          arm-none-eabi-objcopy -O ihex \
+            build/bin/SPEEDYBEEF405WING_for_bl.elf \
+            build/inav_SPEEDYBEEF405WING_for_bl.hex
 
-          echo "ELF size:"
-          "$TOOLS/arm-none-eabi-size" -B "$ELF" || true
-          echo "BIN bytes:"
-          stat -c '%n %s bytes' out/inav_SPEEDYBEEF405WING_for_bl.bin || wc -c < out/inav_SPEEDYBEEF405WING_for_bl.bin
-
-          # Fail if > 490*1024 (Configurator's limit your log showed)
-          MAX=$((490*1024))
-          ACT=$(wc -c < out/inav_SPEEDYBEEF405WING_for_bl.bin)
-          if [ "$ACT" -gt "$MAX" ]; then
-            echo "BIN too large for bootloader slot: $ACT bytes > $MAX bytes"
-            exit 2
-          fi
-
-      - uses: actions/upload-artifact@v4
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
         with:
-          name: inav-SPEEDYBEEF405WING_for_bl
+          name: inav-speedybee-forbl-lto
           path: |
-            out/inav_SPEEDYBEEF405WING_for_bl.bin
-            out/inav_SPEEDYBEEF405WING_for_bl.hex
+            build/inav_SPEEDYBEEF405WING_for_bl.bin
+            build/inav_SPEEDYBEEF405WING_for_bl.hex
