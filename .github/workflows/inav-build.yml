@@ -1,4 +1,4 @@
-name: Build my SPEEDYBEEF405WING (for_bl)
+name: Build SPEEDYBEEF405WING (for_bl BIN+HEX)
 
 on:
   workflow_dispatch:
@@ -6,42 +6,77 @@ on:
     paths:
       - 'src/**'
       - 'cmake/**'
+      - 'lib/**'
+      - '.github/workflows/build-speedybee-forbl.yml'
       - 'CMakeLists.txt'
-      - '.github/workflows/my-speedybee.yml'
 
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
-      - name: Install deps
-        run: sudo apt-get update && sudo apt-get -y install ninja-build xz-utils
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get -y install ninja-build xz-utils
 
-      - name: Configure (with safe size flags)
+      - name: Configure CMake (size-optimized)
         run: |
           rm -rf build
           mkdir -p build
           cd build
           cmake .. -G Ninja \
             -DTOOLCHAIN=arm-none-eabi \
+            -DWARNINGS_AS_ERRORS=OFF \
             -DMAIN_COMPILE_OPTIONS="-Os;-g0;-flto;-ffunction-sections;-fdata-sections" \
             -DMAIN_LINK_OPTIONS="-Wl,--gc-sections"
-          # Optional: turn off warnings-as-errors if you’re iterating:
-          # cmake -DWARNINGS_AS_ERRORS=OFF -P .
 
-      - name: Build ELF + HEX (for bootloader slot)
+      - name: Build bootloader-slot BIN
         run: |
           cd build
-          # Build the bootloader-slot image for your board
-          ninja src/main/target/SPEEDYBEEF405WING/SPEEDYBEEF405WING_for_bl.hex
-          # Collect artifacts
-          mkdir -p out
-          cp src/main/target/SPEEDYBEEF405WING/SPEEDYBEEF405WING_for_bl.hex out/
+          cmake --build . --target src/main/target/SPEEDYBEEF405WING/SPEEDYBEEF405WING_for_bl.bin -j"$(nproc)"
 
-      - name: Upload artifact
+      - name: Make HEX from ELF
+        run: |
+          set -e
+          # Locate the ELF produced by CMake
+          ELF="build/bin/SPEEDYBEEF405WING_for_bl.elf"
+          test -f "$ELF" || ELF="$(find build -maxdepth 2 -type f -name '*SPEEDYBEEF405WING_for_bl.elf' | head -n1)"
+          echo "ELF: $ELF"
+
+          # Find the Arm toolchain objcopy that CMake downloaded
+          TOOL_A="./tools/arm-gnu-toolchain-13.2.rel1/bin"
+          TOOL_B="./build/tools/arm-gnu-toolchain-13.2.rel1/bin"
+          if [ -x "$TOOL_A/arm-none-eabi-objcopy" ]; then
+            OBJCOPY="$TOOL_A/arm-none-eabi-objcopy"
+          elif [ -x "$TOOL_B/arm-none-eabi-objcopy" ]; then
+            OBJCOPY="$TOOL_B/arm-none-eabi-objcopy"
+          else
+            echo "Could not find arm-none-eabi-objcopy in tools/ or build/tools/"; exit 127
+          fi
+          echo "Using objcopy at: $OBJCOPY"
+
+          mkdir -p out
+          # Copy BIN
+          BIN_SRC="$(find build -maxdepth 2 -type f -name '*SPEEDYBEEF405WING_for_bl.bin' | head -n1)"
+          cp -v "$BIN_SRC" out/inav_SPEEDYBEEF405WING_for_bl.bin
+
+          # Create HEX
+          "$OBJCOPY" -O ihex "$ELF" out/inav_SPEEDYBEEF405WING_for_bl.hex
+
+          # Also stash the ELF for debugging
+          cp -v "$ELF" out/
+
+          ls -lh out
+
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: inav_SPEEDYBEEF405WING_for_bl
-          path: build/out/*.hex
-          retention-days: 7
+          name: SPEEDYBEEF405WING_for_bl
+          path: out/*
+          retention-days: 14
