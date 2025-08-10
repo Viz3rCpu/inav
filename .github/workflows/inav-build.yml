@@ -25,7 +25,7 @@ jobs:
           sudo apt-get update
           sudo apt-get -y install ninja-build xz-utils
 
-      - name: Configure CMake (size-optimized)
+      - name: Configure CMake (max stripping)
         run: |
           rm -rf build
           mkdir -p build
@@ -33,8 +33,8 @@ jobs:
           cmake .. -G Ninja \
             -DTOOLCHAIN=arm-none-eabi \
             -DWARNINGS_AS_ERRORS=OFF \
-            -DMAIN_COMPILE_OPTIONS="-Os;-g0;-flto;-ffunction-sections;-fdata-sections" \
-            -DMAIN_LINK_OPTIONS="-Wl,--gc-sections"
+            -DMAIN_COMPILE_OPTIONS="-Os;-g0;-flto;-ffunction-sections;-fdata-sections;-fno-unwind-tables;-fno-asynchronous-unwind-tables;-fno-stack-protector" \
+            -DMAIN_LINK_OPTIONS="-Wl,--gc-sections;-Wl,--strip-all"
 
       - name: Build bootloader-slot BIN
         run: |
