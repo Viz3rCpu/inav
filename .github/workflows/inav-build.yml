@@ -28,13 +28,16 @@ jobs:
             -DCMAKE_C_FLAGS_RELEASE="-O2 -g0" \
             -DCMAKE_CXX_FLAGS_RELEASE="-O2 -g0"
 
-      - name: Build ELF
+      - name: Build ELF and BIN
         run: |
           cmake --build build --target SPEEDYBEEF405WING_for_bl.elf -j$(nproc)
-
-      - name: Build BIN
-        run: |
           cmake --build build --target SPEEDYBEEF405WING_for_bl.bin -j$(nproc)
+
+      - name: Generate HEX from ELF
+        run: |
+          arm-none-eabi-objcopy -O ihex \
+            build/bin/SPEEDYBEEF405WING_for_bl.elf \
+            build/bin/SPEEDYBEEF405WING_for_bl.hex
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -43,3 +46,4 @@ jobs:
           path: |
             build/bin/SPEEDYBEEF405WING_for_bl.elf
             build/bin/SPEEDYBEEF405WING_for_bl.bin
+            build/bin/SPEEDYBEEF405WING_for_bl.hex
