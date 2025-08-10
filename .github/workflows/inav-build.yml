@@ -18,6 +18,12 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y cmake ninja-build git wget xz-utils
 
+      - name: Install ARM toolchain
+        run: |
+          wget https://developer.arm.com/-/media/Files/downloads/gnu/13.2.rel1/binrel/arm-gnu-toolchain-13.2.rel1-x86_64-arm-none-eabi.tar.xz
+          tar -xf arm-gnu-toolchain-13.2.rel1-x86_64-arm-none-eabi.tar.xz
+          echo "$PWD/arm-gnu-toolchain-13.2.Rel1-x86_64-arm-none-eabi/bin" >> $GITHUB_PATH
+
       - name: Configure build
         run: |
           mkdir -p build
@@ -25,8 +31,8 @@ jobs:
             -DCMAKE_BUILD_TYPE=Release \
             -DTARGET=SPEEDYBEEF405WING \
             -DFORCE_BOOTLOADER_BUILD=ON \
-            -DCMAKE_C_FLAGS_RELEASE="-O2 -g0" \
-            -DCMAKE_CXX_FLAGS_RELEASE="-O2 -g0"
+            -DCMAKE_C_FLAGS_RELEASE="-O2 -g0 -flto" \
+            -DCMAKE_CXX_FLAGS_RELEASE="-O2 -g0 -flto"
 
       - name: Build ELF and BIN
         run: |
