@@ -1,49 +1,45 @@
-name: build
+name: Build INAV SpeedyBeeF405Wing
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - master
 
 jobs:
   build:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          submodules: recursive
 
-      - name: Install tools
+      - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y ninja-build cmake xz-utils
+          sudo apt-get install -y cmake ninja-build git wget xz-utils
 
-      - name: Configure (enable LTO)
+      - name: Configure build
         run: |
-          rm -rf build
           mkdir -p build
-          cd build
-          cmake .. -G Ninja -DTOOLCHAIN=arm-none-eabi \
-            -DCMAKE_BUILD_TYPE=RelWithDebInfo \
-            -DCMAKE_C_FLAGS_RELWITHDEBINFO="-Os -flto" \
-            -DCMAKE_EXE_LINKER_FLAGS_RELWITHDEBINFO="-flto"
+          cmake -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DTARGET=SPEEDYBEEF405WING \
+            -DFORCE_BOOTLOADER_BUILD=ON \
+            -DCMAKE_C_FLAGS_RELEASE="-O2 -g0" \
+            -DCMAKE_CXX_FLAGS_RELEASE="-O2 -g0"
 
-      - name: Build (for bootloader slot)
+      - name: Build ELF
         run: |
-          cmake --build build --target src/main/target/SPEEDYBEEF405WING/SPEEDYBEEF405WING_for_bl.elf -j$(nproc)
+          cmake --build build --target SPEEDYBEEF405WING_for_bl.elf -j$(nproc)
 
-      - name: Make BIN/HEX
+      - name: Build BIN
         run: |
-          arm-none-eabi-objcopy -O binary \
-            build/bin/SPEEDYBEEF405WING_for_bl.elf \
-            build/inav_SPEEDYBEEF405WING_for_bl.bin
-          arm-none-eabi-objcopy -O ihex \
-            build/bin/SPEEDYBEEF405WING_for_bl.elf \
-            build/inav_SPEEDYBEEF405WING_for_bl.hex
+          cmake --build build --target SPEEDYBEEF405WING_for_bl.bin -j$(nproc)
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: inav-speedybee-forbl-lto
+          name: inav-speedybeef405wing-build
           path: |
-            build/inav_SPEEDYBEEF405WING_for_bl.bin
-            build/inav_SPEEDYBEEF405WING_for_bl.hex
+            build/bin/SPEEDYBEEF405WING_for_bl.elf
+            build/bin/SPEEDYBEEF405WING_for_bl.bin
