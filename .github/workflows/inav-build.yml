@@ -1,49 +1,47 @@
-name: Build INAV SpeedyBee F405 Wing Optimized
+name: Build my SPEEDYBEEF405WING (for_bl)
 
 on:
   workflow_dispatch:
+  push:
+    paths:
+      - 'src/**'
+      - 'cmake/**'
+      - 'CMakeLists.txt'
+      - '.github/workflows/my-speedybee.yml'
 
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout source
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Install dependencies
+      - name: Install deps
+        run: sudo apt-get update && sudo apt-get -y install ninja-build xz-utils
+
+      - name: Configure (with safe size flags)
         run: |
-          sudo apt-get update
-          sudo apt-get install -y cmake ninja-build python3 git
+          rm -rf build
+          mkdir -p build
+          cd build
+          cmake .. -G Ninja \
+            -DTOOLCHAIN=arm-none-eabi \
+            -DMAIN_COMPILE_OPTIONS="-Os;-g0;-flto;-ffunction-sections;-fdata-sections" \
+            -DMAIN_LINK_OPTIONS="-Wl,--gc-sections"
+          # Optional: turn off warnings-as-errors if you’re iterating:
+          # cmake -DWARNINGS_AS_ERRORS=OFF -P .
 
-      - name: Download ARM GCC Toolchain
+      - name: Build ELF + HEX (for bootloader slot)
         run: |
-          wget https://developer.arm.com/-/media/Files/downloads/gnu/13.2.rel1/binrel/arm-gnu-toolchain-13.2.rel1-x86_64-arm-none-eabi.tar.xz
-          tar -xf arm-gnu-toolchain-13.2.rel1-x86_64-arm-none-eabi.tar.xz
-          echo "$PWD/arm-gnu-toolchain-13.2.Rel1-x86_64-arm-none-eabi/bin" >> $GITHUB_PATH
+          cd build
+          # Build the bootloader-slot image for your board
+          ninja src/main/target/SPEEDYBEEF405WING/SPEEDYBEEF405WING_for_bl.hex
+          # Collect artifacts
+          mkdir -p out
+          cp src/main/target/SPEEDYBEEF405WING/SPEEDYBEEF405WING_for_bl.hex out/
 
-      - name: Configure with size optimization
-        run: |
-          cmake -B build -G Ninja \
-            -DCMAKE_TOOLCHAIN_FILE=cmake/arm-none-eabi.cmake \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DTARGET=SPEEDYBEEF405WING_for_bl \
-            -DCMAKE_C_FLAGS="-Os -g0 -flto -ffunction-sections -fdata-sections -fno-unwind-tables -fno-asynchronous-unwind-tables -fno-stack-protector" \
-            -DCMAKE_EXE_LINKER_FLAGS="-Wl,--gc-sections -Wl,--strip-all"
-
-      - name: Build firmware
-        run: cmake --build build --target SPEEDYBEEF405WING_for_bl.elf -j$(nproc)
-
-      - name: Convert ELF to HEX
-        run: arm-none-eabi-objcopy -O ihex build/bin/SPEEDYBEEF405WING_for_bl.elf build/inav_SPEEDYBEEF405WING_for_bl.hex
-
-      - name: Convert ELF to BIN
-        run: arm-none-eabi-objcopy -O binary build/bin/SPEEDYBEEF405WING_for_bl.elf build/inav_SPEEDYBEEF405WING_for_bl.bin
-
-      - name: Upload artifacts
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: speedybee-f405wing-optimized
-          path: |
-            build/inav_SPEEDYBEEF405WING_for_bl.hex
-            build/inav_SPEEDYBEEF405WING_for_bl.bin
+          name: inav_SPEEDYBEEF405WING_for_bl
+          path: build/out/*.hex
+          retention-days: 7
