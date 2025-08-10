@@ -1,0 +1,47 @@
+name: Build my SPEEDYBEEF405WING (for_bl)
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'src/**'
+      - 'cmake/**'
+      - 'CMakeLists.txt'
+      - '.github/workflows/my-speedybee.yml'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install deps
+        run: sudo apt-get update && sudo apt-get -y install ninja-build xz-utils
+
+      - name: Configure (with safe size flags)
+        run: |
+          rm -rf build
+          mkdir -p build
+          cd build
+          cmake .. -G Ninja \
+            -DTOOLCHAIN=arm-none-eabi \
+            -DMAIN_COMPILE_OPTIONS="-Os;-g0;-flto;-ffunction-sections;-fdata-sections" \
+            -DMAIN_LINK_OPTIONS="-Wl,--gc-sections"
+          # Optional: turn off warnings-as-errors if you’re iterating:
+          # cmake -DWARNINGS_AS_ERRORS=OFF -P .
+
+      - name: Build ELF + HEX (for bootloader slot)
+        run: |
+          cd build
+          # Build the bootloader-slot image for your board
+          ninja src/main/target/SPEEDYBEEF405WING/SPEEDYBEEF405WING_for_bl.hex
+          # Collect artifacts
+          mkdir -p out
+          cp src/main/target/SPEEDYBEEF405WING/SPEEDYBEEF405WING_for_bl.hex out/
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: inav_SPEEDYBEEF405WING_for_bl
+          path: build/out/*.hex
+          retention-days: 7
